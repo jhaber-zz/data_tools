@@ -3,10 +3,13 @@
 
 # Author: Jaren Haber, PhD Candidate
 # Institution (as of this writing): University of California, Berkeley, Dept. of Sociology
-# Date created: January 6, 2018
-# Date last modified: January 6, 2018
+# Contributions by: Ji Shi, Statistics undergraduate, UC Berkeley (as of this writing)
+
+# Date created: January 6, 2019
+# Date last modified: January 22, 2019
+
+# Description: Functions for calculating entity densities, years opened and closed, and entity closure rates. Built for schools, applicable to other contexts.
 # GitHub repo: https://github.com/jhaber-zz/data_tools
-# Description: # For calculating densities (already built) and (coming soon!) school closure rates and cleaned performance variables
 
 # Import packages & functions:
 import pandas
@@ -48,6 +51,218 @@ def density_calc(somedf, fulldf, groupvar, uniqueid, filtervar):
     #new_frame[densityvar] = new_frame['All_school_counts']/merge_frame[("Area (Land)", "Geo_AREALAND")]
     
     return total_density, filtered_density
+
+
+def openclose_calc(statusdf, statusvars_list, uniqueid):
+    """Determines year that each school was opened and (if applicable) closed.
+    
+    Args:
+        DataFrame holding years opened and closed raw data,
+        list of status-years to keep from DF,
+        unique identifier for each entity (e.g., NCES school #).
+        
+    Returns:
+        1-column DF holding year opened for each entity,
+        1-column DF holding year closed for each entity."""
+    
+    # Trim input DFs to only relevant variables for finding close rates and merging
+    statusdf = statusdf[statusvars_list]
+    
+    # Get length of input DF
+    length = statusdf.shape[0]
+    
+    cols = statusvars_list # Simplify naming for more interpretable functions
+    
+    # Define dictionary of status-year vars as (status col : corresponding year)
+    yeardict = {'STATUS98' : 1998, 'STATUS99' : 1999, 'STATUS00' : 2000, 'STATUS01' : 2001, 
+                'STATUS02' : 2002, 'STATUS03' : 2003, 'STATUS04' : 2004, 'STATUS05' : 2005,
+                'STATUS06' : 2006, 'STATUS07' : 2007, 'STATUS08' : 2008, 'STATUS09' : 2009,
+                'STATUS10' : 2010, 'STATUS11' : 2011, 'STATUS12' : 2012, 'STATUS13' : 2013,
+                'SY_STATUS' : 2014, 'SY_STATUS15' : 2015, 'SY_STATUS16' : 2016}
+
+    # Define helper functions for workhorse algorithm below
+    def checkOpenData(statusArr, currYear):
+        """Check for any open status data all the years before given year. 
+        If no previous data on open status, open_year should be this year.
+        If there is a number with meaningful data on openness (this excludes -1, 2, 6, 7), 
+        then return False; else return True."""
+        
+        allNeg1 = True
+        for prevStat in statusArr[:cols.index(currYear)]:
+            if prevStat != -1 and prevStat != 2 and prevStat != 6 and prevStat != 7:
+                allNeg1 = False
+        return allNeg1
+
+    def checkClosedAfter(statusArr, currYear):
+        """Check for any closure status data all the years AFTER given year.
+        If no later data on closure status, closed_year should be this year.
+        If there is a 2 or 6, return True; else return False."""
+        
+        is2or6 = False
+        for afterStat in statusArr[cols.index(currYear):]:
+            if afterStat == 2 or afterStat == 6:
+                is2or6 = True
+        return is2or6
+
+    def checkCloseData(statusArr):
+        """Check for any closure status data ALL years for a given school.
+        If there exist a 2 or 6 at any point, return True; else return False."""
+        
+        is2or6 = False
+        for stat in statusArr:
+            if stat == 2 or stat == 6:
+                is2or6 = True
+        return is2or6
+
+    def getyears_openclose(daterow):
+        """Main algorithm to detect year opened and closed.
+        Goes through certain interval of years, inclusive.
+        
+        Args:
+            Row with dates of status (1 thru 8) for each year in cols (1998-2016).
+            
+        Returns:
+            Year that entity opened, year that entity closed."""
+        
+        statusArr = [] # stores status values for each year
+
+        # Initialize the two series to store year opened and closed
+        YEAR_OPENED = numpy.NaN
+        YEAR_CLOSED = numpy.NaN
+
+        # Put things in statusArr
+        for i in range(len(cols)):
+            if numpy.isnan(row[cols[i]]):
+                statusArr += [-1] #-1 if there is a nan in certain status
+            else:
+                statusArr += [int(row[cols[i]])]
+
+        # Main logic         
+        for col in cols:    
+            stat = -1
+            if(not numpy.isnan(row[col])):
+                stat = int(row[col])
+
+            # If there is a 2, then close_year should be this year
+            if(stat == 2):
+                YEAR_CLOSED = yeardict.get(col)
+
+            # If 1, 3, 4, 5, or 8, run checkOpenData()
+            # If no previous status, open_year should be this year
+            if(stat in [1, 3, 4, 5, 8]):
+                if checkOpenData(statusArr, col):
+                    YEAR_OPENED = yeardict.get(col)
+
+            # If 4, run checkOpenData()
+            # If no previous status, open_year should be the year before this year        
+            if(stat == 4):
+                if checkOpenData(statusArr, col):
+                    YEAR_OPENED = yeardict.get(cols[(cols.index(col) - 1)])
+
+            # If 8, run checkClosedAfter()
+            # If no closure status data (2 or 6) after this year, year_closed should be nothing
+            if(stat == 8):
+                if not checkClosedAfter(statusArr, col):
+                    YEAR_CLOSED = numpy.NaN
+
+            # If 6, run checkClosedAfter()
+            # If no closure status data (2 or 6) after this year, year_closed should be this year
+            if(stat == 6):
+                if not checkClosedAfter(statusArr, col):
+                    YEAR_CLOSED = yeardict.get(col)
+
+        # If never 2 or 6, year_closed is numpy.NaN
+        # Use checkCloseData() to check this
+        if not checkCloseData(statusArr):
+            YEAR_CLOSED = numpy.NaN
+            
+        return YEAR_OPENED, YEAR_CLOSED
+
+        """
+    # Initialize the two series to store years opened and closed
+    YEAR_OPENED = [numpy.NaN for i in range(length)]
+    YEAR_CLOSED = [numpy.NaN for i in range(length)]
+
+    # Main algorithm to detect year opened and closed.
+    # Goes through each row for a certain interval, inclusive.
+    
+    for index, row in statusdf.iterrows():
+        #only calculate for the input interval
+        if index >= 0 and index < length:
+            statusArr = [] #a list used to store all status for a year
+
+            # Put things in statusArr
+            for i in range(len(cols)):
+                if numpy.isnan(row[cols[i]]):
+                    statusArr += [-1] #-1 if there is a nan in certain status
+                else:
+                    statusArr += [int(row[cols[i]])]
+
+            # Main logic         
+            for col in cols:    
+                stat = -1
+                if(not numpy.isnan(row[col])):
+                    stat = int(row[col])
+
+                # If there is a 2, then close_year should be this year
+                if(stat == 2):
+                    YEAR_CLOSED[index] = yeardict.get(col)
+
+                # If 1, 3, 4, 5, or 8, run checkOpenData()
+                # If no previous status, open_year should be this year
+                if(stat in [1, 3, 4, 5, 8]):
+                    if checkOpenData(statusArr, col):
+                        YEAR_OPENED[index] = yeardict.get(col)
+
+                # If 4, run checkOpenData()
+                # If no previous status, open_year should be the year before this year        
+                if(stat == 4):
+                    if checkOpenData(statusArr, col):
+                        YEAR_OPENED[index] = yeardict.get(cols[(cols.index(col) - 1)])
+
+                # If 8, run checkClosedAfter()
+                # If no closure status data (2 or 6) after this year, year_closed should be nothing
+                if(stat == 8):
+                    if not checkClosedAfter(statusArr, col):
+                        YEAR_CLOSED[index] = numpy.NaN
+
+                # If 6, run checkClosedAfter()
+                # If no closure status data (2 or 6) after this year, year_closed should be this year
+                if(stat == 6):
+                    if not checkClosedAfter(statusArr, col):
+                        YEAR_CLOSED[index] = yeardict.get(col)
+
+            # If never 2 or 6, year_closed is numpy.NaN
+            # Use checkCloseData() to check this
+            if not checkCloseData(statusArr):
+                YEAR_CLOSED[index] = numpy.NaN
+                
+
+    # Show cases with missing data
+    for index in range(length):
+        if YEAR_CLOSED[index] == None or YEAR_OPENED[index] == None or YEAR_OPENED[index] == numpy.NaN:
+            print("Missing data found in uniqueid | index | index in year opened array | index in year closed array:\n",
+                  statusdf.loc[uniqueid, index], "|", index,"|", YEAR_OPENED[index],"|", YEAR_CLOSED[index])
+            
+    # Create two DataFrames from year opened/closed arrays
+    openlabel = ['YEAR_OPENED']
+    closelabel = ['YEAR_CLOSED']
+    dfOpened = pandas.DataFrame(YEAR_OPENED, columns = openlabel)
+    dfClosed = pandas.DataFrame(YEAR_CLOSED, columns = closelabel)
+    """
+    
+    statusdf['YEAR_OPENED'], statusdf['YEAR_CLOSED'] = statusdf.apply(lambda x: getyears_openclose())
+    
+    # Concatenate the year opened/closed DFs to original DF
+    # Here we use concat instead of merge because the sequence of NCESSCH is preserved
+    result = pandas.concat([statusdf, dfOpened, dfClosed], axis=1)
+    
+    # Match new columns to order in original DF
+    opened = pandas.merge(statusdf, grouped_total, how='outer', on=[uniqueid])['YEAR_OPENED']
+    closed = pandas.merge(statusdf, grouped_filtered, how='outer', on=[uniqueid])['YEAR_CLOSED']
+    
+    # Return open/close columns
+    return opened, closed
 
 
 def closerate_calc(somedf, openclosedf, groupvar, openvar, closevar, uniqueid, startbound, endbound):
