@@ -65,8 +65,12 @@ def openclose_calc(statusdf, statusvars_list, uniqueid):
         1-column DF holding year opened for each entity,
         1-column DF holding year closed for each entity."""
     
-    # Trim input DFs to only relevant variables for finding close rates and merging
-    statusdf = statusdf[statusvars_list]
+    # Trim input DFs to only relevant variables for finding close rates and merging, also reset index to be safe
+    statusdf = statusdf[statusvars_list].reset_index(drop = True)
+    
+    # Define labels for open and close
+    openlabel = ['YEAR_OPENED']
+    closelabel = ['YEAR_CLOSED']
     
     # Get length of input DF
     length = statusdf.shape[0]
@@ -114,71 +118,6 @@ def openclose_calc(statusdf, statusvars_list, uniqueid):
                 is2or6 = True
         return is2or6
 
-    def getyears_openclose(daterow):
-        """Main algorithm to detect year opened and closed.
-        Goes through certain interval of years, inclusive.
-        
-        Args:
-            Row with dates of status (1 thru 8) for each year in cols (1998-2016).
-            
-        Returns:
-            Year that entity opened, year that entity closed."""
-        
-        statusArr = [] # stores status values for each year
-
-        # Initialize the two series to store year opened and closed
-        YEAR_OPENED = numpy.NaN
-        YEAR_CLOSED = numpy.NaN
-
-        # Put things in statusArr
-        for i in range(len(cols)):
-            if numpy.isnan(row[cols[i]]):
-                statusArr += [-1] #-1 if there is a nan in certain status
-            else:
-                statusArr += [int(row[cols[i]])]
-
-        # Main logic         
-        for col in cols:    
-            stat = -1
-            if(not numpy.isnan(row[col])):
-                stat = int(row[col])
-
-            # If there is a 2, then close_year should be this year
-            if(stat == 2):
-                YEAR_CLOSED = yeardict.get(col)
-
-            # If 1, 3, 4, 5, or 8, run checkOpenData()
-            # If no previous status, open_year should be this year
-            if(stat in [1, 3, 4, 5, 8]):
-                if checkOpenData(statusArr, col):
-                    YEAR_OPENED = yeardict.get(col)
-
-            # If 4, run checkOpenData()
-            # If no previous status, open_year should be the year before this year        
-            if(stat == 4):
-                if checkOpenData(statusArr, col):
-                    YEAR_OPENED = yeardict.get(cols[(cols.index(col) - 1)])
-
-            # If 8, run checkClosedAfter()
-            # If no closure status data (2 or 6) after this year, year_closed should be nothing
-            if(stat == 8):
-                if not checkClosedAfter(statusArr, col):
-                    YEAR_CLOSED = numpy.NaN
-
-            # If 6, run checkClosedAfter()
-            # If no closure status data (2 or 6) after this year, year_closed should be this year
-            if(stat == 6):
-                if not checkClosedAfter(statusArr, col):
-                    YEAR_CLOSED = yeardict.get(col)
-
-        # If never 2 or 6, year_closed is numpy.NaN
-        # Use checkCloseData() to check this
-        if not checkCloseData(statusArr):
-            YEAR_CLOSED = numpy.NaN
-            
-        return YEAR_OPENED, YEAR_CLOSED
-
-        """
     # Initialize the two series to store years opened and closed
     YEAR_OPENED = [numpy.NaN for i in range(length)]
     YEAR_CLOSED = [numpy.NaN for i in range(length)]
@@ -245,24 +184,84 @@ def openclose_calc(statusdf, statusvars_list, uniqueid):
                   statusdf.loc[uniqueid, index], "|", index,"|", YEAR_OPENED[index],"|", YEAR_CLOSED[index])
             
     # Create two DataFrames from year opened/closed arrays
-    openlabel = ['YEAR_OPENED']
-    closelabel = ['YEAR_CLOSED']
-    dfOpened = pandas.DataFrame(YEAR_OPENED, columns = openlabel)
-    dfClosed = pandas.DataFrame(YEAR_CLOSED, columns = closelabel)
-    """
+    dfOpened = pandas.DataFrame(YEAR_OPENED, columns = [openlabel])
+    dfClosed = pandas.DataFrame(YEAR_CLOSED, columns = [closelabel])
     
-    statusdf['YEAR_OPENED'], statusdf['YEAR_CLOSED'] = statusdf.apply(lambda x: getyears_openclose())
-    
-    # Concatenate the year opened/closed DFs to original DF
-    # Here we use concat instead of merge because the sequence of NCESSCH is preserved
-    result = pandas.concat([statusdf, dfOpened, dfClosed], axis=1)
-    
-    # Match new columns to order in original DF
-    opened = pandas.merge(statusdf, grouped_total, how='outer', on=[uniqueid])['YEAR_OPENED']
-    closed = pandas.merge(statusdf, grouped_filtered, how='outer', on=[uniqueid])['YEAR_CLOSED']
+    statusdf[openlabel] = dfOpened[openlabel]
+    statusdf[closelabel] = dfClosed[closelabel]
     
     # Return open/close columns
-    return opened, closed
+    return statusdf[openlabel], statusdf[openlabel]
+
+    '''
+    # TO DO: Fix this apply() function, faster than the array-based method.
+    
+    def getyears_openclose(daterow):
+        """Main algorithm to detect year opened and closed.
+        Goes through certain interval of years, inclusive.
+        
+        Args:
+            Row with dates of status (1 thru 8) for each year in cols (1998-2016).
+            
+        Returns:
+            Year that entity opened, year that entity closed."""
+        
+        statusArr = [] # stores status values for each year
+
+        # Initialize the two variables to store year opened and closed
+        YEAR_OPENED = numpy.NaN
+        YEAR_CLOSED = numpy.NaN
+
+        # Put things in statusArr
+        for i in range(len(cols)):
+            if numpy.isnan(row[cols[i]]):
+                statusArr += [-1] #-1 if there is a nan in certain status
+            else:
+                statusArr += [int(row[cols[i]])]
+
+        # Main logic         
+        for col in cols:    
+            stat = -1
+            if(not numpy.isnan(row[col])):
+                stat = int(row[col])
+
+            # If there is a 2, then close_year should be this year
+            if(stat == 2):
+                YEAR_CLOSED = yeardict.get(col)
+
+            # If 1, 3, 4, 5, or 8, run checkOpenData()
+            # If no previous status, open_year should be this year
+            if(stat in [1, 3, 4, 5, 8]):
+                if checkOpenData(statusArr, col):
+                    YEAR_OPENED = yeardict.get(col)
+
+            # If 4, run checkOpenData()
+            # If no previous status, open_year should be the year before this year        
+            if(stat == 4):
+                if checkOpenData(statusArr, col):
+                    YEAR_OPENED = yeardict.get(cols[(cols.index(col) - 1)])
+
+            # If 8, run checkClosedAfter()
+            # If no closure status data (2 or 6) after this year, year_closed should be nothing
+            if(stat == 8):
+                if not checkClosedAfter(statusArr, col):
+                    YEAR_CLOSED = numpy.NaN
+
+            # If 6, run checkClosedAfter()
+            # If no closure status data (2 or 6) after this year, year_closed should be this year
+            if(stat == 6):
+                if not checkClosedAfter(statusArr, col):
+                    YEAR_CLOSED = yeardict.get(col)
+
+        # If never 2 or 6, year_closed is numpy.NaN
+        # Use checkCloseData() to check this
+        if not checkCloseData(statusArr):
+            YEAR_CLOSED = numpy.NaN
+            
+        return YEAR_OPENED, YEAR_CLOSED
+         
+    statusdf['YEAR_OPENED'], statusdf['YEAR_CLOSED'] = statusdf.apply(lambda x: getyears_openclose())
+    '''
 
 
 def closerate_calc(somedf, openclosedf, groupvar, openvar, closevar, uniqueid, startbound, endbound):
