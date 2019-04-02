@@ -5,8 +5,9 @@ from nltk.corpus import stopwords # for eliminating stop words
 from sklearn.feature_extraction import text
 
 
-def stopwords_make(vocab_path_old = ""):
-    """Create stopwords list"""
+def stopwords_make(vocab_path_old = "", extend_stopwords = False):
+    """Create stopwords list. 
+    If extend_stopwords is True, create larger stopword list by joining sklearn list to NLTK list."""
                                                      
     stop_word_list = list(set(stopwords.words("english"))) # list of english stopwords
 
@@ -48,9 +49,11 @@ def stopwords_make(vocab_path_old = ""):
     for state in [state.lower() for state in states]:
         stop_word_list.append(state)
         
-    #stop_word_list = text.ENGLISH_STOP_WORDS.union(stop_word_list)
+    # Add even more stop words:
+    if extend_stopwords == True:
+        stop_word_list = text.ENGLISH_STOP_WORDS.union(stop_word_list)
         
-    # If path to old vocab not specified, skip last step and return stop word this far
+    # If path to old vocab not specified, skip last step and return stop word list thus far
     if vocab_path_old == "":
         return stop_word_list
 
@@ -100,7 +103,26 @@ def unicode_make():
     return unicode_list
 
 
-def clean_sentence(sentence):
+def get_common_words(tokenized_corpus, max_percentage):
+    """Discover most common words in corpus up to max_percentage.
+    
+    Args:
+        Corpus tokenized by words,
+        Highest allowable frequency of documents in which a token may appear (e.g., 1-5%)
+        
+    Returns:
+        List of most frequent words in corpus"""
+    
+    # Code goes here
+    # Probably using nltk.CountVectorizer
+
+    
+# Create useful lists using above functions:
+stop_words_list = stopwords_make()
+punctstr = punctstr_make()
+unicode_list = unicode_make()
+
+def clean_sentence(sentence, remove_stopwords = True, most_common_words = []):
     """Removes numbers, emails, URLs, unicode characters, hex characters, and punctuation from a sentence 
     separated by whitespaces. Returns a tokenized, cleaned list of words from the sentence.
     
@@ -109,10 +131,7 @@ def clean_sentence(sentence):
     Returns: 
         Cleaned & tokenized sentence, i.e. a list of cleaned, lower-case, one-word strings"""
     
-    # Create useful lists using above functions:
-    stop_words_list = stopwords_make()
-    punctstr = puncstr_make()
-    unicode_list = unicode_make()
+    global stop_words_list, punctstr, unicode_list
     
     # Replace unicode spaces, tabs, and underscores with spaces, and remove whitespaces from start/end of sentence:
     sentence = sentence.replace(u"\xa0", u" ").replace(u"\\t", u" ").replace(u"_", u" ").strip(" ")
@@ -135,12 +154,20 @@ def clean_sentence(sentence):
         word = word.strip() # Remove leading and trailing spaces
         
         # Filter out emails and URLs:
-        if ("@" not in word and not word.startswith(('http', 'https', 'www', '//', '\\', 'x_', 'x/', 'srcimage')) and not word.endswith(('.com', '.net', '.gov', '.org', '.jpg', '.pdf', 'png', 'jpeg', 'php'))):
+        if ("@" in word or word.startswith(('http', 'https', 'www', '//', '\\', 'x_', 'x/', 'srcimage')) or word.endswith(('.com', '.net', '.gov', '.org', '.jpg', '.pdf', 'png', 'jpeg', 'php'))):
+            continue
             
-            # Remove punctuation (only after URLs removed):
-            word = re.sub(r"["+punctstr+"]+", r'', word).strip("'").strip("-") # Remove punctuations, and remove dashes and apostrophes only from start/end of words
-            if word not in stop_word_list: # Filter out stop words
+        # Remove punctuation (only after URLs removed):
+        word = re.sub(r"["+punctstr+"]+", r'', word).strip("'").strip("-") # Remove punctuations, and remove dashes and apostrophes only from start/end of words
+        
+        if remove_stopwords and word in stop_word_list: # Filter out stop words
+            continue
                 
-                sent_list.append(word.lower()) # Add lower-cased word to list
+        # TO DO: Pass in most_common_words to function; write function to find the top 1-5% most frequent words, which we will exclude
+        # Remove most common words:
+        if word in most_common_words:
+            continue
+        
+        sent_list.append(word.lower()) # Add lower-cased word to list (after passing checks)
 
     return sent_list # Return clean, tokenized sentence
