@@ -3,6 +3,7 @@ import re, datetime
 import string # for one method of eliminating punctuation
 from nltk.corpus import stopwords # for eliminating stop words
 from sklearn.feature_extraction import text
+from nltk.stem.porter import PorterStemmer; ps = PorterStemmer() # approximate but effective (and common) method of stemming words
 
 
 def stopwords_make(vocab_path_old = "", extend_stopwords = False):
@@ -122,7 +123,7 @@ stop_words_list = stopwords_make()
 punctstr = punctstr_make()
 unicode_list = unicode_make()
 
-def clean_sentence(sentence, remove_stopwords = True, most_common_words = []):
+def clean_sentence(sentence, remove_stopwords = True, most_common_words = [], stemming=False):
     """Removes numbers, emails, URLs, unicode characters, hex characters, and punctuation from a sentence 
     separated by whitespaces. Returns a tokenized, cleaned list of words from the sentence.
     
@@ -131,7 +132,7 @@ def clean_sentence(sentence, remove_stopwords = True, most_common_words = []):
     Returns: 
         Cleaned & tokenized sentence, i.e. a list of cleaned, lower-case, one-word strings"""
     
-    global stop_words_list, punctstr, unicode_list
+    global stop_words_list, punctstr, unicode_list, stem
     
     # Replace unicode spaces, tabs, and underscores with spaces, and remove whitespaces from start/end of sentence:
     sentence = sentence.replace(u"\xa0", u" ").replace(u"\\t", u" ").replace(u"_", u" ").strip(" ")
@@ -160,13 +161,17 @@ def clean_sentence(sentence, remove_stopwords = True, most_common_words = []):
         # Remove punctuation (only after URLs removed):
         word = re.sub(r"["+punctstr+"]+", r'', word).strip("'").strip("-") # Remove punctuations, and remove dashes and apostrophes only from start/end of words
         
-        if remove_stopwords and word in stop_word_list: # Filter out stop words
+        if remove_stopwords and word in stop_words_list: # Filter out stop words
             continue
                 
         # TO DO: Pass in most_common_words to function; write function to find the top 1-5% most frequent words, which we will exclude
         # Remove most common words:
         if word in most_common_words:
             continue
+        
+        # Stem word (if applicable):
+        if stemming:
+            word = ps.stem(word)
         
         sent_list.append(word.lower()) # Add lower-cased word to list (after passing checks)
 

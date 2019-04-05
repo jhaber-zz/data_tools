@@ -14,7 +14,7 @@ import numpy
 from quickpickle import quickpickle_dump, quickpickle_load # For quickly loading & saving pickle files in Python
 
 
-def check_df(DF, colname):
+def check_df(DF, colname=''):
     """Displays basic info about a dataframe in memory.
     Input: Pandas DataFrame object
     Output: printed basic stats:    # rows and columns, 
@@ -23,7 +23,8 @@ def check_df(DF, colname):
     
     # Show DF info, including # duplicates by colname
     print("# rows and cols: ", str(DF.shape))
-    print("# duplicates by " + str(colname) + ": " + str(sum(DF.duplicated(subset=colname, keep='first'))))
+    if colname != '':
+        print("# duplicates by " + str(colname) + ": " + str(sum(DF.duplicated(subset=colname, keep='first'))))
 
     print("\nColumns and # missing cases (if any): ")
     for col in list(DF):
