@@ -35,7 +35,7 @@ def check_df(DF, colname=''):
             print(col)
 
 
-def convert_df(df, ignore_list):
+def convert_df(df, ignore_list=[]):
     """Makes a Pandas DataFrame more memory-efficient through intelligent use of Pandas data types: 
     specifically, by storing columns with repetitive Python strings not with the object dtype for unique values 
     (entirely stored in memory) but as categoricals, which are represented by repeated integer values. This is a 

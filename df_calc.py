@@ -16,6 +16,33 @@ import pandas
 import numpy
 
 
+def count_pdfs(quadruple_list, elemnum):
+    """Count the number of PDFs for website in quadruple_list (i.e., a row in WEBTEXT).
+    
+    Args:
+        quadruple_list: list of quadruples, or (URL, depth, isPDF, list_of_strings)
+        elemnum: the element number of isPDF--a binary indicating whether the webpage is translated from a PDF file
+    
+    Returns:
+        Series indicating total number of PDFs in organization (row)"""
+    
+    numpdfs = 0 # Initialize
+    
+    for page in quadruple_list:
+        ispdf = page[elemnum]
+        
+        # Check whether elemnum is correct element number by checking contents
+        if ispdf not in [0, 1, False, True, 'False', 'True']:
+            print("Wrong elemnum given: not a binary indicator of PDF status. Try again!")
+            return
+        
+        # If page comes from a PDF, add 1 to number of PDFs for school
+        if ispdf in [1, True, 'True']:
+            numpdfs += 1
+    
+    return numpdfs
+
+
 def density_calc(somedf, fulldf, groupvar, uniqueid, filtervar):
     """Calculates total number of entities (rows) in a given DataFrame that share a given clustering/group variable.
     Uses uniqueid to identify number of independent entities. 
