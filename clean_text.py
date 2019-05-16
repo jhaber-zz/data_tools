@@ -5,6 +5,14 @@ from nltk.corpus import stopwords # for eliminating stop words
 from sklearn.feature_extraction import text
 from nltk.stem.porter import PorterStemmer; ps = PorterStemmer() # approximate but effective (and common) method of stemming words
 
+# Prep dictionaries of English words
+from nltk.corpus import words # Dictionary of 236K English words from NLTK
+english_nltk = set(words.words()) # Make callable
+english_long = set() # Dictionary of 467K English words from https://github.com/dwyl/english-words
+with open("english_words.txt", "r") as f:
+    for word in f:
+        english_long.add(word.strip())
+
 
 def stopwords_make(vocab_path_old = "", extend_stopwords = False):
     """Create stopwords list. 
@@ -123,28 +131,34 @@ stop_words_list = stopwords_make()
 punctstr = punctstr_make()
 unicode_list = unicode_make()
 
-def clean_sentence(sentence, remove_stopwords = True, most_common_words = [], stemming=False):
+def clean_sentence(sentence, remove_stopwords = True, keep_english = False, fast = False, exclude_words = [], stemming=False):
     """Removes numbers, emails, URLs, unicode characters, hex characters, and punctuation from a sentence 
     separated by whitespaces. Returns a tokenized, cleaned list of words from the sentence.
     
     Args: 
-        Sentence, i.e. string that possibly includes spaces and punctuation
+        sentence, i.e. string that possibly includes spaces and punctuation
+        remove_stopwords: whether to remove stopwords, default True
+        keep_english: whether to remove words not in english dictionary, default False; if 'restrictive', keep word only if in NLTK's dictionary of 237K english words; if 'permissive', keep word only if in longer list of 436K english words
+        fast: whether to skip advanced sentence cleaning, removing emails, URLs, and unicode and hex chars, default False
+        exclude_words: list of words to exclude, may be most common words or named entities, default empty list
+        stemming: whether to apply PorterStemmer to each word, default False
     Returns: 
         Cleaned & tokenized sentence, i.e. a list of cleaned, lower-case, one-word strings"""
     
-    global stop_words_list, punctstr, unicode_list, stem
+    global stop_words_list, punctstr, unicode_list, english_nltk, english_long
     
     # Replace unicode spaces, tabs, and underscores with spaces, and remove whitespaces from start/end of sentence:
     sentence = sentence.replace(u"\xa0", u" ").replace(u"\\t", u" ").replace(u"_", u" ").strip(" ")
     
-    # Remove hex characters (e.g., \xa0\, \x80):
-    sentence = re.sub(r'[^\x00-\x7f]', r'', sentence) #replace anything that starts with a hex character 
+    if not fast:
+        # Remove hex characters (e.g., \xa0\, \x80):
+        sentence = re.sub(r'[^\x00-\x7f]', r'', sentence) #replace anything that starts with a hex character 
 
-    # Replace \\x, \\u, \\b, or anything that ends with \u2605
-    sentence = re.sub(r"\\x.*|\\u.*|\\b.*|\u2605$", "", sentence)
-        
-    # Remove all elements that appear in unicode_list (looks like r'u1000|u10001|'):
-    sentence = re.sub(r'|'.join(map(re.escape, unicode_list)), '', sentence)
+        # Replace \\x, \\u, \\b, or anything that ends with \u2605
+        sentence = re.sub(r"\\x.*|\\u.*|\\b.*|\u2605$", "", sentence)
+
+        # Remove all elements that appear in unicode_list (looks like r'u1000|u10001|'):
+        sentence = re.sub(r'|'.join(map(re.escape, unicode_list)), '', sentence)
     
     sentence = re.sub("\d+", "", sentence) # Remove numbers
     
@@ -155,7 +169,7 @@ def clean_sentence(sentence, remove_stopwords = True, most_common_words = [], st
         word = word.strip() # Remove leading and trailing spaces
         
         # Filter out emails and URLs:
-        if ("@" in word or word.startswith(('http', 'https', 'www', '//', '\\', 'x_', 'x/', 'srcimage')) or word.endswith(('.com', '.net', '.gov', '.org', '.jpg', '.pdf', 'png', 'jpeg', 'php'))):
+        if not fast and ("@" in word or word.startswith(('http', 'https', 'www', '//', '\\', 'x_', 'x/', 'srcimage')) or word.endswith(('.com', '.net', '.gov', '.org', '.jpg', '.pdf', 'png', 'jpeg', 'php'))):
             continue
             
         # Remove punctuation (only after URLs removed):
@@ -166,8 +180,16 @@ def clean_sentence(sentence, remove_stopwords = True, most_common_words = [], st
                 
         # TO DO: Pass in most_common_words to function; write function to find the top 1-5% most frequent words, which we will exclude
         # Remove most common words:
-        if word in most_common_words:
+        if word in exclude_words:
             continue
+            
+        if keep_english == 'restrictive':
+            if word not in english_nltk: #Filter out non-English words using shorter list
+                continue
+            
+        if keep_english == 'permissive': 
+            if word not in english_long: #Filter out non-English words using longer list
+                continue
         
         # Stem word (if applicable):
         if stemming:
